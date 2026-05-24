@@ -5,6 +5,7 @@ import {LabDataFetch} from "./LabDataFetch"
 import {TableSchema} from "./DataStore"
 import { DBType } from "./LabPatrolPub"
 import {DiagLldpConn, DiagLldpNode} from "./DiagPub"
+import {AxosLocationHistory} from "./AxosLocationHistory"
 
 type FetchResponse = {
     code: number,
@@ -503,9 +504,53 @@ class LabPatrolServer extends BackendServer {
                 logger.error('error handle fetch get axosTopo')
             }
         }
-        this.registRouteCall({ type: 'get', route: '/axostopo', callBack: fetchAxosTopology }) 
+        this.registRouteCall({ type: 'get', route: '/axostopo', callBack: fetchAxosTopology })
+
+        let fetchLocationHistoryCallBack = (type: 'card' | 'module' | 'ont') => async function (ctx:Context, next:any) {
+            ctx.status = 200;
+            let ctxQuery = ctx.query;
+            let sn = '';
+            if (ctxQuery.sn) {
+                sn = ctxQuery.sn as string;
+            }
+
+            if (!sn) {
+                ctx.response.body = {
+                    code: 400,
+                    message: 'Missing required parameter: sn'
+                };
+                return;
+            }
+
+            ctx.set('Content-Type', 'application/json')
+            ctx.set("Access-Control-Allow-Origin", "*");
+            try {
+                const historyService = new AxosLocationHistory();
+                const history = await historyService.getLocationHistory(sn, type);
+
+                let result = {
+                    code: 200,
+                    message: {
+                        totalCount: history.length,
+                        res: history
+                    }
+                };
+                ctx.response.body = result;
+            } catch (e) {
+                logger.error(`error handle fetch ${type} location history`)
+                ctx.status = 500;
+                ctx.response.body = {
+                    code: 500,
+                    message: 'Internal server error'
+                };
+            }
+        }
+        this.registRouteCall({ type: 'get', route: '/cardlocation', callBack: fetchLocationHistoryCallBack('card') })
+        this.registRouteCall({ type: 'get', route: '/modulelocation', callBack: fetchLocationHistoryCallBack('module') })
+        this.registRouteCall({ type: 'get', route: '/ontlocation', callBack: fetchLocationHistoryCallBack('ont') })
 
     }
+
 
 }
 if (__filename === require.main?.filename) {
